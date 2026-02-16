@@ -126,6 +126,7 @@ Visual Studio-ban:
 # 🧠 System Logic (Mermaid diagrams)
 
 ## 1) High-level user flow (Seller vs Buyer)
+## 1) High-level user flow (Seller vs Buyer)
 
 ```mermaid
 flowchart TD
@@ -165,66 +166,4 @@ flowchart TD
     BidFlow --> BuyerMenu
     B5 --> BuyerMenu
     B6 --> BuyerMenu
-
-stateDiagram-v2
-    [*] --> Open
-    Open --> Closed : close_time reached (auto)
-    Open --> Cancelled : seller cancels (optional)
-    Closed --> [*]
-    Cancelled --> [*]
-
-sequenceDiagram
-    participant U as User
-    participant C as ConsoleApp
-    participant D as PostgreSQL
-
-    U->>C: bid <auctionItemId> <amount>
-    C->>D: SELECT auction_state_id, close_time FROM auction_items WHERE id=...
-    D-->>C: state + close_time
-    C->>C: Validate state==Open AND close_time>now
-    C->>D: SELECT MAX(amount) FROM bids WHERE auction_item_id=...
-    D-->>C: currentHighest
-    C->>C: Validate amount >= max(start_price, currentHighest+min_increment)
-    C->>D: INSERT INTO bids(...)
-    D-->>C: OK (bid_id)
-    C-->>U: Bid accepted
-flowchart TD
-    A[Close auction] --> B[Load bids for auction]
-    B --> C{Any bids?}
-    C -->|No| D[Set state=Closed, winning_bid_id=NULL]
-    C -->|Yes| E[Order: amount DESC, created_at ASC, bid_id ASC]
-    E --> F[Select first row as winner]
-    F --> G[Update auction_items: state=Closed, winning_bid_id, closed_at]
-    D --> H[Create notifications (optional)]
-    G --> H[Create notifications (winner + seller)]
-    H --> I([Done])
-sequenceDiagram
-    participant T as Timer/Background task
-    participant D as PostgreSQL
-    participant C as CloseService
-
-    T->>C: Tick (e.g. every 1s/5s)
-    C->>D: SELECT open auctions WHERE close_time<=now()
-    D-->>C: list of auction_item_id
-    loop for each auction
-        C->>D: BEGIN
-        C->>D: SELECT winner bid (ORDER BY tie-break)
-        C->>D: UPDATE auction_items SET state=Closed, winning_bid_id, closed_at
-        C->>D: INSERT notifications (Pending)
-        C->>D: COMMIT
-    end
-
-flowchart TD
-    A[Auction closed] --> B[Insert Notification rows (Pending)]
-    B --> C[Outbox worker polls Pending]
-    C --> D{Send OK?}
-    D -->|Yes| E[Update status=Sent, sent_at=now]
-    D -->|No| F[attempt_count++, status=Failed or keep Pending]
-    E --> G([Done])
-    F --> G([Done])
-
-flowchart LR
-    A[Command / Timer event] --> B[Validate]
-    B --> C[Persist change]
-    C --> D[Write event log]
 
