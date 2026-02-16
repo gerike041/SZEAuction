@@ -66,9 +66,10 @@ flowchart TD
 ```
 ### 3) Aukció lezárása (Tie-break szabályok)
 Ha az aukció lejár, a rendszer az alábbi prioritások szerint választ nyertest:
-    1. Legmagasabb összeg (Amount DESC).
-    2. Időrend (Aki előbb tette meg ugyanazt az összeget - CreatedAt ASC).
-    3. ID (Végső döntő - Id ASC)
+1. Legmagasabb összeg (Amount DESC).
+2. Időrend (Aki előbb tette meg ugyanazt az összeget - CreatedAt ASC).
+3. ID (Végső döntő - Id ASC)
+    
 ```mermaid
 flowchart TD
     A[Aukció lezárása] --> B[Licitek betöltése]
