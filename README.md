@@ -56,13 +56,13 @@ flowchart TD
 ### 2) Licitálási folyamat (Szekvencia diagram)
 ```mermaid
 flowchart TD
-    A[Aukció lezárása] --> B[Licitek betöltése]
-    B --> C{Van licit?}
-    C -->|Nincs| D[Státusz=Closed, Nyertes=NULL]
-    C -->|Van| E[Rendezés: Összeg DESC, Idő ASC]
-    E --> F[Első rekord = Nyertes]
-    F --> G[Update: auction_items (state, winning_bid_id)]
-    G --> H[Értesítések küldése]
+    W_A[Aukció lezárása] --> W_B[Licitek betöltése]
+    W_B --> W_C{Van licit?}
+    W_C -->|Nincs| W_D[Státusz=Closed, Nyertes=NULL]
+    W_C -->|Van| W_E[Rendezés: Összeg DESC, Idő ASC, ID ASC]
+    W_E --> W_F[Első rekord = Nyertes]
+    W_F --> W_G[Update: auction_items (state, winning_bid_id)]
+    W_G --> W_H[Értesítések létrehozása]
 ```
 ### 3) Aukció lezárása (Tie-break szabályok)
 Ha az aukció lejár, a rendszer az alábbi prioritások szerint választ nyertest:
@@ -72,11 +72,14 @@ Ha az aukció lejár, a rendszer az alábbi prioritások szerint választ nyerte
     
 ```mermaid
 flowchart TD
-    A[Aukció lezárása] --> B[Licitek betöltése]
-    B --> C{Van licit?}
-    C -->|Nincs| D[Státusz=Closed, Nyertes=NULL]
-    C -->|Van| E[Rendezés: Összeg DESC, Idő ASC]
-    E --> F[Első rekord = Nyertes]
-    F --> G[Update: auction_items (state, winning_bid_id)]
-    G --> H[Értesítések küldése]
+    T_A[Aukció lejárt (close_time <= now)] --> T_B[Open aukciók lekérdezése]
+    T_B --> T_C{Talált aukciót?}
+    T_C -->|Nincs| T_D[Done]
+    T_C -->|Van| T_E[BEGIN TRANSACTION]
+    T_E --> T_F[Nyertes kiválasztása: amount DESC, created_at ASC, bid_id ASC]
+    T_F --> T_G[UPDATE auction_items: state=Closed, winning_bid_id, closed_at]
+    T_G --> T_H[INSERT notifications: status=Pending]
+    T_H --> T_I[COMMIT]
+    T_I --> T_B
+
 ```
