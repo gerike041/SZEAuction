@@ -59,10 +59,12 @@ flowchart TD
     W_A[Aukció lezárása] --> W_B[Licitek betöltése]
     W_B --> W_C{Van licit?}
     W_C -->|Nincs| W_D[Státusz=Closed, Nyertes=NULL]
-    W_C -->|Van| W_E[Rendezés: Összeg DESC, Idő ASC, ID ASC]
-    W_E --> W_F[Első rekord = Nyertes]
-    W_F --> W_G[Update: auction_items (state, winning_bid_id)]
-    W_G --> W_H[Értesítések létrehozása]
+    W_C -->|Van| W_E[Rendezés: osszeg DESC, ido ASC, id ASC]
+    W_E --> W_F[Elso rekord = Nyertes]
+    W_F --> W_G[Update auction_items: state + winning_bid_id]
+    W_G --> W_H[Ertesites letrehozasa]
+
+
 ```
 ### 3) Aukció lezárása (Tie-break szabályok)
 Ha az aukció lejár, a rendszer az alábbi prioritások szerint választ nyertest:
