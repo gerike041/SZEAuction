@@ -74,14 +74,15 @@ Ha az aukció lejár, a rendszer az alábbi prioritások szerint választ nyerte
     
 ```mermaid
 flowchart TD
-    T_A[Aukció lejárt (close_time <= now)] --> T_B[Open aukciók lekérdezése]
+    T_A["Aukció lejárt: close_time kisebb vagy egyenlő mint now"] --> T_B[Open aukciók lekérdezése]
     T_B --> T_C{Talált aukciót?}
     T_C -->|Nincs| T_D[Done]
-    T_C -->|Van| T_E[BEGIN TRANSACTION]
-    T_E --> T_F[Nyertes kiválasztása: amount DESC, created_at ASC, bid_id ASC]
-    T_F --> T_G[UPDATE auction_items: state=Closed, winning_bid_id, closed_at]
-    T_G --> T_H[INSERT notifications: status=Pending]
-    T_H --> T_I[COMMIT]
+    T_C -->|Van| T_E["BEGIN TRANSACTION"]
+    T_E --> T_F["Nyertes kiválasztása: amount DESC, created_at ASC, bid_id ASC"]
+    T_F --> T_G["UPDATE auction_items: state=Closed, winning_bid_id, closed_at"]
+    T_G --> T_H["INSERT notifications: status=Pending"]
+    T_H --> T_I["COMMIT"]
     T_I --> T_B
+
 
 ```
