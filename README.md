@@ -51,3 +51,31 @@ flowchart TD
     BuyerMenu --> B1[Aktív aukciók listázása]
     BuyerMenu --> B4[Licitálás indítása]
     B4 --> BidFlow[Licit validálás + Mentés]
+
+```
+### 2) Licitálási folyamat (Szekvencia diagram)
+```mermaid
+flowchart TD
+    A[Aukció lezárása] --> B[Licitek betöltése]
+    B --> C{Van licit?}
+    C -->|Nincs| D[Státusz=Closed, Nyertes=NULL]
+    C -->|Van| E[Rendezés: Összeg DESC, Idő ASC]
+    E --> F[Első rekord = Nyertes]
+    F --> G[Update: auction_items (state, winning_bid_id)]
+    G --> H[Értesítések küldése]
+```
+### 3) Aukció lezárása (Tie-break szabályok)
+Ha az aukció lejár, a rendszer az alábbi prioritások szerint választ nyertest:
+    1. Legmagasabb összeg (Amount DESC).
+    2. Időrend (Aki előbb tette meg ugyanazt az összeget - CreatedAt ASC).
+    3. ID (Végső döntő - Id ASC)
+```mermaid
+flowchart TD
+    A[Aukció lezárása] --> B[Licitek betöltése]
+    B --> C{Van licit?}
+    C -->|Nincs| D[Státusz=Closed, Nyertes=NULL]
+    C -->|Van| E[Rendezés: Összeg DESC, Idő ASC]
+    E --> F[Első rekord = Nyertes]
+    F --> G[Update: auction_items (state, winning_bid_id)]
+    G --> H[Értesítések küldése]
+```
