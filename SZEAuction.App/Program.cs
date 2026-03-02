@@ -65,7 +65,7 @@ public class Program
         var role = ChooseRole();
         var session = new Session(dbUser.Id, dbUser.Username, role);
 
-        RunRoleFlow(session);
+        await RunRoleFlow(session, conn);
     }
 
     static Role ChooseRole()
@@ -86,12 +86,12 @@ public class Program
         }
     }
 
-    static void RunRoleFlow(Session session)
+    static async Task RunRoleFlow(Session session, Npgsql.NpgsqlConnection conn)
     {
         if (session.Role == Role.elado)
             RunSellerFlow(session);
         else
-            RunBuyerFlow(session);
+            await RunBuyerFlowAsync(session, conn);
     }
 
     static void RunSellerFlow(Session session)
@@ -99,8 +99,39 @@ public class Program
         Console.WriteLine($"\n--- Eladói Menü ({session.Username}) ---");
     }
 
-    static void RunBuyerFlow(Session session)
+    static async Task RunBuyerFlowAsync(Session session, Npgsql.NpgsqlConnection conn)
     {
-        Console.WriteLine($"\n--- Vevői Menü ({session.Username}) ---");
+        // Repository létrehozása ami addig fut amíg a user ki nem lép 0-val
+        var auctionRepo = new AuctionRepository(conn);
+
+        while (true)
+        {
+            Console.WriteLine($"\n=== Vevői Menü ({session.Username}) ===");
+            Console.WriteLine("1 - Aktív aukciók listázása");
+            Console.WriteLine("2 - Licitálás indítása");
+            Console.WriteLine("0 - Kilépés");
+            Console.Write("Választás: ");
+
+            var choice = Console.ReadLine()?.Trim();
+
+            switch (choice)
+            {
+                case "1":
+                    await ListActiveAuctionsAction.ExecuteAsync(auctionRepo);
+                    break;
+
+                case "2":
+                    await StartBiddingAction.ExecuteAsync(session, auctionRepo);
+                    break;
+
+                case "0":
+                    Console.WriteLine("Viszlát!");
+                    return;
+
+                default:
+                    Console.WriteLine("Érvénytelen választás, próbáld újra.");
+                    break;
+            }
+        }
     }
 }
