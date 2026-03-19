@@ -167,4 +167,61 @@ public sealed class AuctionRepository
         return Convert.ToInt32(result);
     }
 
+    public async Task<List<AuctionItem>> ListMyAuctionsAsync(
+        int sellerUserId,
+        int limit = 10,
+        CancellationToken ct = default)
+    {
+        // Itt nem szűrünk rá a nyitott státuszra, és a lejártakat is engedjük
+        const string sql = """
+            SELECT
+                ai.auction_item_id,
+                ai.seller_user_id,
+                ai.title,
+                ai.description,
+                ai.close_time,
+                ai.start_price,
+                ai.min_increment,
+                MAX(b.amount) AS current_highest_bid
+            FROM public.auction_items ai
+            LEFT JOIN public.bids b
+                ON b.auction_item_id = ai.auction_item_id
+            WHERE ai.seller_user_id = @sellerUserId
+            GROUP BY
+                ai.auction_item_id,
+                ai.seller_user_id,
+                ai.title,
+                ai.description,
+                ai.close_time,
+                ai.start_price,
+                ai.min_increment
+            ORDER BY ai.close_time DESC
+            LIMIT @limit
+            """;
+
+        await using var cmd = new NpgsqlCommand(sql, _connection);
+        cmd.Parameters.AddWithValue("sellerUserId", sellerUserId);
+        cmd.Parameters.AddWithValue("limit", limit);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+        var list = new List<AuctionItem>();
+
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(new AuctionItem(
+                AuctionItemId: reader.GetInt32(0),
+                SellerUserId: reader.GetInt32(1),
+                Title: reader.GetString(2),
+                Description: reader.IsDBNull(3) ? null : reader.GetString(3),
+                CloseTime: reader.GetFieldValue<DateTimeOffset>(4),
+                StartPrice: reader.GetDecimal(5),
+                MinIncrement: reader.GetDecimal(6),
+                CurrentHighestBid: reader.IsDBNull(7) ? null : reader.GetDecimal(7)
+            ));
+        }
+
+        return list;
+    }
+
 }

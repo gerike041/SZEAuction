@@ -102,6 +102,7 @@ public class Program
         {
             Console.WriteLine($"\n=== Eladói Menü ({session.Username}) ===");
             Console.WriteLine("1 - Új aukció indítása");
+            Console.WriteLine("2 - Saját hirdetéseim");
             Console.WriteLine("0 - Kilépés");
             Console.Write("Választás: ");
 
@@ -111,6 +112,9 @@ public class Program
             {
                 case "1":
                     await CreateAuctionAction.ExecuteAsync(session, auctionRepo);
+                    break;
+                case "2":
+                    await ListMyAuctionsAction.ExecuteAsync(session, auctionRepo);
                     break;
                 case "0":
                     Console.WriteLine("Viszlát!");
