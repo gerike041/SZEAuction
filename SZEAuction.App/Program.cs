@@ -89,14 +89,37 @@ public class Program
     static async Task RunRoleFlow(Session session, Npgsql.NpgsqlConnection conn)
     {
         if (session.Role == Role.elado)
-            RunSellerFlow(session);
+            await RunSellerFlowAsync(session, conn);
         else
             await RunBuyerFlowAsync(session, conn);
     }
 
-    static void RunSellerFlow(Session session)
+    static async Task RunSellerFlowAsync(Session session, Npgsql.NpgsqlConnection conn)
     {
-        Console.WriteLine($"\n--- Eladói Menü ({session.Username}) ---");
+        var auctionRepo = new AuctionRepository(conn);
+
+        while (true)
+        {
+            Console.WriteLine($"\n=== Eladói Menü ({session.Username}) ===");
+            Console.WriteLine("1 - Új aukció indítása");
+            Console.WriteLine("0 - Kilépés");
+            Console.Write("Választás: ");
+
+            var choice = Console.ReadLine()?.Trim();
+
+            switch (choice)
+            {
+                case "1":
+                    await CreateAuctionAction.ExecuteAsync(session, auctionRepo);
+                    break;
+                case "0":
+                    Console.WriteLine("Viszlát!");
+                    return;
+                default:
+                    Console.WriteLine("Érvénytelen választás, próbáld újra.");
+                    break;
+            }
+        }
     }
 
     static async Task RunBuyerFlowAsync(Session session, Npgsql.NpgsqlConnection conn)

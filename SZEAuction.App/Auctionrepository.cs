@@ -135,4 +135,36 @@ public sealed class AuctionRepository
         var result = await insertCmd.ExecuteScalarAsync(ct);
         return Convert.ToInt32(result);
     }
+
+    public async Task<int> CreateAuctionAsync(
+        int sellerUserId,
+        string title,
+        string? description,
+        DateTimeOffset closeTime,
+        decimal startPrice,
+        decimal minIncrement,
+        CancellationToken ct = default)
+    {
+        // Al-lekérdezéssel lekérjük az 'Open' státusz azonosítóját
+        const string sql = """
+            INSERT INTO public.auction_items 
+            (seller_user_id, title, description, close_time, start_price, min_increment, auction_state_id)
+            VALUES 
+            (@sellerUserId, @title, @description, @closeTime, @startPrice, @minIncrement, 
+             (SELECT auction_state_id FROM public.auction_states WHERE name = 'Open'))
+            RETURNING auction_item_id
+            """;
+
+        await using var cmd = new NpgsqlCommand(sql, _connection);
+        cmd.Parameters.AddWithValue("sellerUserId", sellerUserId);
+        cmd.Parameters.AddWithValue("title", title);
+        cmd.Parameters.AddWithValue("description", string.IsNullOrWhiteSpace(description) ? DBNull.Value : description);
+        cmd.Parameters.AddWithValue("closeTime", closeTime);
+        cmd.Parameters.AddWithValue("startPrice", startPrice);
+        cmd.Parameters.AddWithValue("minIncrement", minIncrement);
+
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return Convert.ToInt32(result);
+    }
+
 }
