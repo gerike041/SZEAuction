@@ -135,4 +135,93 @@ public sealed class AuctionRepository
         var result = await insertCmd.ExecuteScalarAsync(ct);
         return Convert.ToInt32(result);
     }
+
+    public async Task<int> CreateAuctionAsync(
+        int sellerUserId,
+        string title,
+        string? description,
+        DateTimeOffset closeTime,
+        decimal startPrice,
+        decimal minIncrement,
+        CancellationToken ct = default)
+    {
+        // Al-lekérdezéssel lekérjük az 'Open' státusz azonosítóját
+        const string sql = """
+            INSERT INTO public.auction_items 
+            (seller_user_id, title, description, close_time, start_price, min_increment, auction_state_id)
+            VALUES 
+            (@sellerUserId, @title, @description, @closeTime, @startPrice, @minIncrement, 
+             (SELECT auction_state_id FROM public.auction_states WHERE name = 'Open'))
+            RETURNING auction_item_id
+            """;
+
+        await using var cmd = new NpgsqlCommand(sql, _connection);
+        cmd.Parameters.AddWithValue("sellerUserId", sellerUserId);
+        cmd.Parameters.AddWithValue("title", title);
+        cmd.Parameters.AddWithValue("description", string.IsNullOrWhiteSpace(description) ? DBNull.Value : description);
+        cmd.Parameters.AddWithValue("closeTime", closeTime);
+        cmd.Parameters.AddWithValue("startPrice", startPrice);
+        cmd.Parameters.AddWithValue("minIncrement", minIncrement);
+
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return Convert.ToInt32(result);
+    }
+
+    public async Task<List<AuctionItem>> ListMyAuctionsAsync(
+        int sellerUserId,
+        int limit = 10,
+        CancellationToken ct = default)
+    {
+        // Itt nem szűrünk rá a nyitott státuszra, és a lejártakat is engedjük
+        const string sql = """
+            SELECT
+                ai.auction_item_id,
+                ai.seller_user_id,
+                ai.title,
+                ai.description,
+                ai.close_time,
+                ai.start_price,
+                ai.min_increment,
+                MAX(b.amount) AS current_highest_bid
+            FROM public.auction_items ai
+            LEFT JOIN public.bids b
+                ON b.auction_item_id = ai.auction_item_id
+            WHERE ai.seller_user_id = @sellerUserId
+            GROUP BY
+                ai.auction_item_id,
+                ai.seller_user_id,
+                ai.title,
+                ai.description,
+                ai.close_time,
+                ai.start_price,
+                ai.min_increment
+            ORDER BY ai.close_time DESC
+            LIMIT @limit
+            """;
+
+        await using var cmd = new NpgsqlCommand(sql, _connection);
+        cmd.Parameters.AddWithValue("sellerUserId", sellerUserId);
+        cmd.Parameters.AddWithValue("limit", limit);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+        var list = new List<AuctionItem>();
+
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(new AuctionItem(
+                AuctionItemId: reader.GetInt32(0),
+                SellerUserId: reader.GetInt32(1),
+                Title: reader.GetString(2),
+                Description: reader.IsDBNull(3) ? null : reader.GetString(3),
+                CloseTime: reader.GetFieldValue<DateTimeOffset>(4),
+                StartPrice: reader.GetDecimal(5),
+                MinIncrement: reader.GetDecimal(6),
+                CurrentHighestBid: reader.IsDBNull(7) ? null : reader.GetDecimal(7)
+            ));
+        }
+
+        return list;
+    }
+
 }
