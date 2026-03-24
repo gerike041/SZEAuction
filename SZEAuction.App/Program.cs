@@ -21,6 +21,14 @@ public class Program
         await using var conn = await db.GetOpenConnectionAsync();
         Console.WriteLine("Connected successfully!");
 
+        Console.WriteLine("Closing expired auctions...");
+        var closingService = new AuctionClosingService(conn);
+        await closingService.CloseAllExpiredAuctionsAsync();
+
+        Console.WriteLine("Sendin out Gmails");
+        var notificationSender = new NotificationSenderService(conn, config);
+        await notificationSender.SendPendingNotificationsAsync();
+
         // Bejelentkezés
         var userRepo = new UserRepository(conn);
 
@@ -28,7 +36,7 @@ public class Program
 
         while (true)
         {
-            Console.Write("Felhasználónév: ");
+            Console.Write("Email cím: ");
             var usernameInput = Console.ReadLine()?.Trim();
 
             Console.Write("Jelszó: ");

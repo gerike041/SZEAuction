@@ -1,4 +1,5 @@
 ﻿using Npgsql;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace SZEAuction.App;
 
@@ -64,7 +65,7 @@ public sealed class AuctionRepository
 
         return list;
     }
-
+    
     public async Task<int> PlaceBidAsync(
         int auctionItemId,
         int bidderUserId,
@@ -223,5 +224,4 @@ public sealed class AuctionRepository
 
         return list;
     }
-
 }
