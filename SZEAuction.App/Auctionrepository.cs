@@ -78,15 +78,26 @@ public sealed class AuctionRepository
                 ai.close_time,
                 ai.start_price,
                 ai.min_increment,
-                ast.name              AS state_name,
-                MAX(b.amount)         AS current_highest_bid
+                ast.name AS state_name,
+                (
+                    SELECT b2.amount
+                    FROM public.bids b2
+                    WHERE b2.auction_item_id = ai.auction_item_id
+                    ORDER BY b2.amount DESC, b2.created_at ASC, b2.bid_id ASC
+                    LIMIT 1
+                ) AS current_highest_bid,
+                (
+                    SELECT b3.bidder_user_id
+                    FROM public.bids b3
+                    WHERE b3.auction_item_id = ai.auction_item_id
+                    ORDER BY b3.amount DESC, b3.created_at ASC, b3.bid_id ASC
+                    LIMIT 1
+                ) AS current_leader_user_id,
+                ai.title
             FROM public.auction_items ai
             JOIN public.auction_states ast
                 ON ast.auction_state_id = ai.auction_state_id
-            LEFT JOIN public.bids b
-                ON b.auction_item_id = ai.auction_item_id
             WHERE ai.auction_item_id = @itemId
-            GROUP BY ai.close_time, ai.start_price, ai.min_increment, ast.name
             """;
 
         await using var checkCmd = new NpgsqlCommand(checkSql, _connection);
@@ -96,11 +107,14 @@ public sealed class AuctionRepository
         if (!await reader.ReadAsync(ct))
             throw new InvalidOperationException("Az aukció nem található.");
 
+
         var closeTime = reader.GetFieldValue<DateTimeOffset>(0);
         var startPrice = reader.GetDecimal(1);
         var minIncrement = reader.GetDecimal(2);
         var stateName = reader.GetString(3);
         decimal? highestBid = reader.IsDBNull(4) ? null : reader.GetDecimal(4);
+        int? previousLeaderUserId = reader.IsDBNull(5) ? null : reader.GetInt32(5);
+        string itemTitle = reader.GetString(6);
 
         await reader.CloseAsync();
 
@@ -134,6 +148,54 @@ public sealed class AuctionRepository
         insertCmd.Parameters.AddWithValue("amount", amount);
 
         var result = await insertCmd.ExecuteScalarAsync(ct);
+        int newBidId = Convert.ToInt32(result);
+
+        if (previousLeaderUserId.HasValue && previousLeaderUserId.Value != bidderUserId)
+        {
+            const string insertNotificationSql = """
+        INSERT INTO public.notifications
+            (user_id, auction_item_id, status, created_at, type, subject, body, attempt_count)
+        VALUES
+            (@userId, @auctionItemId, 0, NOW(), @type, @subject, @body, 0)
+        """;
+
+            await using var notificationCmd = new NpgsqlCommand(insertNotificationSql, _connection);
+
+            notificationCmd.Parameters.AddWithValue("userId", previousLeaderUserId.Value);
+            notificationCmd.Parameters.AddWithValue("auctionItemId", auctionItemId);
+            notificationCmd.Parameters.AddWithValue("type", "Outbid");
+
+            notificationCmd.Parameters.AddWithValue(
+                "subject",
+                "You have been outbid"
+            );
+
+            notificationCmd.Parameters.AddWithValue(
+                "body",
+                $"""
+                Hello!
+
+                Another bidder has placed a higher bid than yours.
+
+                Item:
+                {itemTitle}
+
+                Your previous highest bid:
+                {highestBid:N0} Ft
+
+                New highest bid:
+                {amount:N0} Ft
+
+                If you still want to win the item, you can place a higher bid.
+
+                Best regards,
+                SZEAuction Team
+                """
+            );
+
+            await notificationCmd.ExecuteNonQueryAsync(ct);
+        }
+
         return Convert.ToInt32(result);
     }
 
