@@ -19,7 +19,7 @@ public sealed class AuctionClosingService
         {
             const string lockAuctionSql = """
                 SELECT auction_item_id, seller_user_id, title
-                FROM auction_items
+                FROM public.auction_items
                 WHERE auction_item_id = @auctionItemId
                   AND close_time <= NOW()
                   AND auction_state_id = 1
@@ -48,7 +48,7 @@ public sealed class AuctionClosingService
 
             const string winnerSql = """
                 SELECT bid_id, bidder_user_id
-                FROM bids
+                FROM public.bids
                 WHERE auction_item_id = @auctionItemId
                 ORDER BY amount DESC, created_at ASC, bid_id ASC
                 LIMIT 1
@@ -67,7 +67,7 @@ public sealed class AuctionClosingService
             }
 
             const string updateAuctionSql = """
-                UPDATE auction_items
+                UPDATE public.auction_items
                 SET auction_state_id = 2,
                     winning_bid_id = @winningBidId,
                     closed_at = NOW()
@@ -84,7 +84,7 @@ public sealed class AuctionClosingService
 
             const string notificationExistsSql = """
                 SELECT 1
-                FROM notifications
+                FROM public.notifications
                 WHERE auction_item_id = @auctionItemId
                   AND user_id = @userId
                   AND type = @type
@@ -92,7 +92,7 @@ public sealed class AuctionClosingService
                 """;
 
             const string insertNotificationSql = """
-                INSERT INTO notifications
+                INSERT INTO public.notifications
                     (user_id, auction_item_id, status, created_at, type, subject, body, attempt_count)
                 VALUES
                     (@userId, @auctionItemId, 0, NOW(), @type, @subject, @body, 0)
@@ -115,35 +115,36 @@ public sealed class AuctionClosingService
                 if (!winnerNotificationExists)
                 {
                     await using var winnerNotificationCmd = new NpgsqlCommand(insertNotificationSql, _connection, tx);
+
                     winnerNotificationCmd.Parameters.AddWithValue("auctionItemId", auctionItemId);
                     winnerNotificationCmd.Parameters.AddWithValue("userId", winnerUserId.Value);
                     winnerNotificationCmd.Parameters.AddWithValue("type", "AuctionWon");
                     winnerNotificationCmd.Parameters.AddWithValue(
                         "subject",
-                        "Congratulations! You won the auction"
+                        "Gratulálunk! Megnyerted az aukciót"
                     );
                     winnerNotificationCmd.Parameters.AddWithValue(
                         "body",
-                            $"""
-                            Hello!
+                        $"""
+                        Kedves Felhasználó!
 
-                            Congratulations, you have won the auction.
+                        Gratulálunk, sikeresen megnyerted az aukciót.
 
-                            Item:
-                            {itemTitle}
+                        Tétel neve:
+                        {itemTitle}
 
-                            Auction ID:
-                            {auctionItemId}
+                        Aukció azonosító:
+                        {auctionItemId}
 
-                            Our system has successfully closed the auction and recorded you as the winning bidder.
+                        A rendszer lezárta az aukciót, és téged rögzített nyertes licitálóként.
 
-                            The seller may contact you soon with further details regarding the transaction.
+                        Az eladó hamarosan felveheti veled a kapcsolatot a tranzakció további részleteivel kapcsolatban.
 
-                            Thank you for using SZEAuction.
+                        Köszönjük, hogy a SZEAuction rendszert használod.
 
-                            Best regards,
-                            SZEAuction Team
-                            """);
+                        Üdvözlettel:
+                        SZEAuction csapat
+                        """);
 
                     await winnerNotificationCmd.ExecuteNonQueryAsync();
                 }
@@ -164,53 +165,54 @@ public sealed class AuctionClosingService
             if (!sellerNotificationExists)
             {
                 await using var sellerNotificationCmd = new NpgsqlCommand(insertNotificationSql, _connection, tx);
+
                 sellerNotificationCmd.Parameters.AddWithValue("auctionItemId", auctionItemId);
                 sellerNotificationCmd.Parameters.AddWithValue("userId", sellerUserId);
                 sellerNotificationCmd.Parameters.AddWithValue("type", "AuctionSold");
                 sellerNotificationCmd.Parameters.AddWithValue(
                     "subject",
-                    "Your auction has ended"
+                    "Lezárult az aukciód"
                 );
                 sellerNotificationCmd.Parameters.AddWithValue(
                     "body",
                     winnerUserId.HasValue
                     ? $"""
-                    Hello!
+                    Kedves Felhasználó!
 
-                    Your auction has ended successfully.
+                    Az aukciód sikeresen lezárult.
 
-                    Item:
+                    Tétel neve:
                     {itemTitle}
 
-                    Auction ID:
+                    Aukció azonosító:
                     {auctionItemId}
 
-                    A winning bidder has been selected for your item.
+                    A rendszer kiválasztotta a nyertes licitálót.
 
-                    You may now proceed with contacting the buyer to complete the transaction.
+                    Most már felveheted a kapcsolatot a vevővel az adásvétel további részleteinek egyeztetéséhez.
 
-                    Thank you for using SZEAuction.
+                    Köszönjük, hogy a SZEAuction rendszert használod.
 
-                    Best regards,
-                    SZEAuction Team
+                    Üdvözlettel:
+                    SZEAuction csapat
                     """
                     : $"""
-                    Hello!
+                    Kedves Felhasználó!
 
-                    Your auction has ended.
+                    Az aukciód lezárult.
 
-                    Item:
+                    Tétel neve:
                     {itemTitle}
 
-                    Auction ID:
+                    Aukció azonosító:
                     {auctionItemId}
 
-                    Unfortunately, no bids were placed on this item.
+                    Sajnos erre a tételre nem érkezett licit.
 
-                    You may relist the item if you wish.
+                    Ha szeretnéd, később újra meghirdetheted a terméket.
 
-                    Best regards,
-                    SZEAuction Team
+                    Üdvözlettel:
+                    SZEAuction csapat
                     """);
 
                 await sellerNotificationCmd.ExecuteNonQueryAsync();
@@ -233,7 +235,7 @@ public sealed class AuctionClosingService
     {
         const string sql = """
             SELECT auction_item_id
-            FROM auction_items
+            FROM public.auction_items
             WHERE close_time <= NOW()
               AND auction_state_id = 1
             ORDER BY close_time ASC;
@@ -255,11 +257,12 @@ public sealed class AuctionClosingService
     public async Task CloseAllExpiredAuctionsAsync()
     {
         var auctionIds = await GetExpiredOpenAuctionIdsAsync();
-        Console.WriteLine($"Expired open auctions count: {auctionIds.Count}");
+
+        System.Diagnostics.Debug.WriteLine($"Lejárt, nyitott aukciók száma: {auctionIds.Count}");
 
         foreach (var auctionId in auctionIds)
         {
-            Console.WriteLine($"Processing auction {auctionId}");
+            System.Diagnostics.Debug.WriteLine($"Aukció feldolgozása: {auctionId}");
             await CloseExpiredAuctionAsync(auctionId);
         }
     }

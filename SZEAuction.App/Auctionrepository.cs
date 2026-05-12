@@ -12,7 +12,7 @@ public sealed class AuctionRepository
         _connection = connection;
     }
 
-    // lekérdezés ami csak a nyílt státuszú és még le nem zárt aukciókat listázza, a jelenlegi legmagasabb licittel együtt
+    
     public async Task<List<AuctionItem>> ListActiveAuctionsAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -48,7 +48,7 @@ public sealed class AuctionRepository
 
         var list = new List<AuctionItem>();
 
-        // midnen visszaadott rekordot beolvasunk és létrehozunk belőle egy AuctionItem objektumot, amit hozzáadunk a listához
+        
         while (await reader.ReadAsync(ct))
         {
             list.Add(new AuctionItem(
@@ -72,7 +72,7 @@ public sealed class AuctionRepository
         decimal amount,
         CancellationToken ct = default)
     {
-        // Validálá az aukció még nyitott és a licit összege elég magas
+        
         const string checkSql = """
             SELECT
                 ai.close_time,
@@ -124,7 +124,7 @@ public sealed class AuctionRepository
         if (closeTime <= DateTimeOffset.UtcNow)
             throw new InvalidOperationException("Az aukció lezárási ideje lejárt.");
 
-        // Kiszámoljuk a minimum követelményt, ha van már licit, akkor az a legmagasabb + a minimum lépés, egyébként a kezdőár
+        
         decimal minimumRequired = highestBid.HasValue
             ? highestBid.Value + minIncrement
             : startPrice;
@@ -135,7 +135,7 @@ public sealed class AuctionRepository
                 $"(jelenlegi legmagasabb: {(highestBid.HasValue ? highestBid.Value.ToString("N2") : "nincs")}, " +
                 $"min. lépés: {minIncrement:N2}).");
 
-        // Mentés, ha minden validáción átmentünk, visszaadjuk az újonnan létrehozott licit azonosítóját
+        
         const string insertSql = """
             INSERT INTO public.bids (auction_item_id, bidder_user_id, amount)
             VALUES (@itemId, @userId, @amount)
@@ -208,7 +208,7 @@ public sealed class AuctionRepository
         decimal minIncrement,
         CancellationToken ct = default)
     {
-        // Al-lekérdezéssel lekérjük az 'Open' státusz azonosítóját
+        
         const string sql = """
             INSERT INTO public.auction_items 
             (seller_user_id, title, description, close_time, start_price, min_increment, auction_state_id)
@@ -235,7 +235,7 @@ public sealed class AuctionRepository
         int limit = 10,
         CancellationToken ct = default)
     {
-        // Itt nem szűrünk rá a nyitott státuszra, és a lejártakat is engedjük
+        
         const string sql = """
             SELECT
                 ai.auction_item_id,
