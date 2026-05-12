@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
+using System.Security.Cryptography;
 
 namespace SZEAuction.App;
 
@@ -21,13 +22,22 @@ public class Program
         await using var conn = await db.GetOpenConnectionAsync();
         Console.WriteLine("Connected successfully!");
 
-        Console.WriteLine("Closing expired auctions...");
-        var closingService = new AuctionClosingService(conn);
-        await closingService.CloseAllExpiredAuctionsAsync();
+        _ = Task.Run(async () =>
+        {
+            await using var backgroundConn = await db.GetOpenConnectionAsync();
 
-        Console.WriteLine("Sendin out Gmails");
-        var notificationSender = new NotificationSenderService(conn, config);
-        await notificationSender.SendPendingNotificationsAsync();
+            var closingService = new AuctionClosingService(backgroundConn);
+            var notificationSender = new NotificationSenderService(backgroundConn, config);
+
+            using var timer = new PeriodicTimer(TimeSpan.FromMinutes(2));
+
+            await RunBackgroundTasksAsync(closingService, notificationSender);
+
+            while (await timer.WaitForNextTickAsync())
+            {
+                await RunBackgroundTasksAsync(closingService, notificationSender);
+            }
+        });
 
         // Bejelentkezés
         var userRepo = new UserRepository(conn);
@@ -70,47 +80,81 @@ public class Program
 
         Console.WriteLine("Sikeres bejelentkezés!");
 
-        var role = ChooseRole();
-        var session = new Session(dbUser.Id, dbUser.Username, role);
-
-        await RunRoleFlow(session, conn);
+        await RunRoleFlow(dbUser, conn);
     }
 
     static Role ChooseRole()
     {
         while (true)
         {
-            Console.WriteLine("\nVálassz szerepkört:");
-            Console.WriteLine("1 - Eladó");
-            Console.WriteLine("2 - Vevő");
+            Console.Clear();
+
+            Console.WriteLine("================================");
+            Console.WriteLine("        SZEAuction Login        ");
+            Console.WriteLine("================================");
+            Console.WriteLine();
+            Console.WriteLine("Válassz szerepkört:");
+            Console.WriteLine();
+            Console.WriteLine("[1] Eladó");
+            Console.WriteLine("[2] Vevő");
+            Console.WriteLine();
             Console.Write("Választás: ");
 
             var input = Console.ReadLine();
 
-            if (input == "1") return Role.elado;
-            if (input == "2") return Role.vevo;
+            switch (input)
+            {
+                case "1":
+                    Console.Clear();
+                    return Role.elado;
 
-            Console.WriteLine("Érvénytelen választás.");
+                case "2":
+                    Console.Clear();
+                    return Role.vevo;
+
+                default:
+                    Console.WriteLine();
+                    Console.WriteLine("Érvénytelen választás.");
+                    Console.WriteLine("Nyomj meg egy gombot az újrapróbáláshoz...");
+                    Console.ReadKey();
+                    break;
+            }
         }
     }
 
-    static async Task RunRoleFlow(Session session, Npgsql.NpgsqlConnection conn)
+    static async Task RunRoleFlow(DbUser dbUser, Npgsql.NpgsqlConnection conn)
     {
-        if (session.Role == Role.elado)
-            await RunSellerFlowAsync(session, conn);
-        else
-            await RunBuyerFlowAsync(session, conn);
+        while (true)
+        {
+            var role = ChooseRole();
+            var session = new Session(dbUser.Id, dbUser.Username, role);
+
+            FlowResult result;
+
+            if (session.Role == Role.elado)
+                result = await RunSellerFlowAsync(session, conn);
+            else
+                result = await RunBuyerFlowAsync(session, conn);
+
+            if (result == FlowResult.Exit)
+                return;
+
+
+        }
     }
 
-    static async Task RunSellerFlowAsync(Session session, Npgsql.NpgsqlConnection conn)
+    static async Task<FlowResult> RunSellerFlowAsync(Session session, Npgsql.NpgsqlConnection conn)
     {
         var auctionRepo = new AuctionRepository(conn);
 
         while (true)
         {
-            Console.WriteLine($"\n=== Eladói Menü ({session.Username}) ===");
+            Console.Clear();
+
+            Console.WriteLine($"=== Eladói Menü ({session.Username}) ===");
             Console.WriteLine("1 - Új aukció indítása");
             Console.WriteLine("2 - Saját hirdetéseim");
+            Console.WriteLine("3 - Vissza szerepkörválasztáshoz");
             Console.WriteLine("0 - Kilépés");
             Console.Write("Választás: ");
 
@@ -119,31 +163,46 @@ public class Program
             switch (choice)
             {
                 case "1":
+                    Console.Clear();
                     await CreateAuctionAction.ExecuteAsync(session, auctionRepo);
+                    Pause();
                     break;
+
                 case "2":
+                    Console.Clear();
                     await ListMyAuctionsAction.ExecuteAsync(session, auctionRepo);
+                    Pause();
                     break;
+
+                case "3":
+                    return FlowResult.BackToRoleSelection;
+
                 case "0":
+                    Console.Clear();
                     Console.WriteLine("Viszlát!");
-                    return;
+                    return FlowResult.Exit;
+
                 default:
+                    Console.WriteLine();
                     Console.WriteLine("Érvénytelen választás, próbáld újra.");
+                    Pause();
                     break;
             }
         }
     }
 
-    static async Task RunBuyerFlowAsync(Session session, Npgsql.NpgsqlConnection conn)
+    static async Task<FlowResult> RunBuyerFlowAsync(Session session, Npgsql.NpgsqlConnection conn)
     {
-        // Repository létrehozása ami addig fut amíg a user ki nem lép 0-val
         var auctionRepo = new AuctionRepository(conn);
 
         while (true)
         {
-            Console.WriteLine($"\n=== Vevői Menü ({session.Username}) ===");
+            Console.Clear();
+
+            Console.WriteLine($"=== Vevői Menü ({session.Username}) ===");
             Console.WriteLine("1 - Aktív aukciók listázása");
             Console.WriteLine("2 - Licitálás indítása");
+            Console.WriteLine("3 - Vissza szerepkörválasztáshoz");
             Console.WriteLine("0 - Kilépés");
             Console.Write("Választás: ");
 
@@ -152,21 +211,61 @@ public class Program
             switch (choice)
             {
                 case "1":
+                    Console.Clear();
                     await ListActiveAuctionsAction.ExecuteAsync(auctionRepo);
+                    Pause();
                     break;
 
                 case "2":
+                    Console.Clear();
                     await StartBiddingAction.ExecuteAsync(session, auctionRepo);
+                    Pause();
                     break;
 
+                case "3":
+                    return FlowResult.BackToRoleSelection;
+
                 case "0":
+                    Console.Clear();
                     Console.WriteLine("Viszlát!");
-                    return;
+                    return FlowResult.Exit;
 
                 default:
+                    Console.WriteLine();
                     Console.WriteLine("Érvénytelen választás, próbáld újra.");
+                    Pause();
                     break;
             }
         }
+    }
+    private static async Task RunBackgroundTasksAsync(
+    AuctionClosingService closingService,
+    NotificationSenderService notificationSender)
+    {
+        try
+        {
+            System.Diagnostics.Debug.WriteLine("Closing expired auctions...");
+            await closingService.CloseAllExpiredAuctionsAsync();
+
+            System.Diagnostics.Debug.WriteLine("Sending out Gmails...");
+            await notificationSender.SendPendingNotificationsAsync();
+
+            System.Diagnostics.Debug.WriteLine("Background tasks finished.");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Background task error: {ex.Message}");
+        }
+    }
+    enum FlowResult
+    {
+        BackToRoleSelection,
+        Exit
+    }
+    static void Pause()
+    {
+        Console.WriteLine();
+        Console.WriteLine("Nyomj meg egy gombot a folytatáshoz...");
+        Console.ReadKey(true);
     }
 }

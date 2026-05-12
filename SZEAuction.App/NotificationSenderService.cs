@@ -28,8 +28,8 @@ public sealed class NotificationSenderService
                    n.subject,
                    n.body,
                    u.username
-            FROM notifications n
-            JOIN users u ON u.user_id = n.user_id
+            FROM public.notifications n
+            JOIN public.users u ON u.user_id = n.user_id
             WHERE n.status = 0
             ORDER BY n.created_at ASC
             """;
@@ -82,7 +82,7 @@ public sealed class NotificationSenderService
     private async Task MarkNotificationAsSentAsync(int notificationId)
     {
         const string sql = """
-            UPDATE notifications
+            UPDATE public.notifications
             SET status = 1,
                 sent_at = NOW()
             WHERE notification_id = @notificationId
@@ -96,7 +96,7 @@ public sealed class NotificationSenderService
     private async Task MarkNotificationAsFailedAsync(int notificationId, string error)
     {
         const string sql = """
-            UPDATE notifications
+            UPDATE public.notifications
             SET status = 2,
                 last_error = @error,
                 attempt_count = attempt_count + 1
