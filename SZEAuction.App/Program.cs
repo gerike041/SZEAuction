@@ -151,11 +151,13 @@ public class Program
         {
             Console.Clear();
 
-            Console.WriteLine($"=== Eladói Menü ({session.Username}) ===");
-            Console.WriteLine("1 - Új aukció indítása");
-            Console.WriteLine("2 - Saját hirdetéseim");
-            Console.WriteLine("3 - Vissza szerepkörválasztáshoz");
-            Console.WriteLine("0 - Kilépés");
+            Console.WriteLine("=========================================");
+            Console.WriteLine($"Eladói Menü ({session.Username})");
+            Console.WriteLine("=========================================");
+            Console.WriteLine("[1] Új aukció indítása");
+            Console.WriteLine("[2] Saját hirdetéseim");
+            Console.WriteLine("[3] Vissza szerepkörválasztáshoz");
+            Console.WriteLine("[0] Kilépés");
             Console.Write("Választás: ");
 
             var choice = Console.ReadLine()?.Trim();
