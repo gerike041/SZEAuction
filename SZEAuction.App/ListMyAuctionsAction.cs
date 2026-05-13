@@ -32,11 +32,39 @@ namespace SZEAuction.App
                     ? $"{a.CurrentHighestBid.Value,10:N2}"
                     : $"{"nincs",10}";
 
-                // Megnézzük, hogy az idő alapján lejárt-e
-                string status = a.CloseTime <= DateTimeOffset.UtcNow ? "[Lejárt]" : "[Aktív]";
+                // Státusz és szín meghatározása
+                string status;
+                ConsoleColor statusColor;
 
-                Console.WriteLine(
-                    $"{i + 1,-4} {Truncate(a.Title, 25),-25} {a.StartPrice,10:N2} {highestStr}  {a.CloseTime.ToLocalTime():yyyy-MM-dd HH:mm} {status}");
+                if (a.CloseTime <= DateTimeOffset.UtcNow)
+                {
+                    // Ha lejárt, megnézzük, hogy érkezett-e rá licit
+                    if (a.CurrentHighestBid.HasValue)
+                    {
+                        status = "[Elkelt]";
+                        statusColor = ConsoleColor.Yellow;
+                    }
+                    else
+                    {
+                        status = "[Licit nélkül]";
+                        statusColor = ConsoleColor.Red;
+                    }
+                }
+                else
+                {
+                    // Ha még nem járt le
+                    status = "[Aktív]";
+                    statusColor = ConsoleColor.Green;
+                }
+
+                // Kiírjuk a sor elejét normál színnel (Console.Write, hogy ne rakjon új sort)
+                Console.Write(
+                    $"{i + 1,-4} {Truncate(a.Title, 25),-25} {a.StartPrice,10:N2} {highestStr}  {a.CloseTime.ToLocalTime():yyyy-MM-dd HH:mm} ");
+
+                // Színt váltunk, kiírjuk a státuszt, majd visszaállítjuk az eredeti színt
+                Console.ForegroundColor = statusColor;
+                Console.WriteLine(status);
+                Console.ResetColor();
             }
         }
 
